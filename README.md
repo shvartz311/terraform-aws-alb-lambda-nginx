@@ -6,4 +6,4 @@ docker run -it --rm -v ${PWD}:/work -w /work --entrypoint /bin/sh amazon/aws-cli
 You can install the things you usually work with and then commit that image and work with that.
 
 # some handy tools
-sudo apt install -y jq gzip nano tar git unzip wget docker.io ansible
+sudo apt install -y jq gzip nano tar git unzip wget docker.io epel-release ansible
