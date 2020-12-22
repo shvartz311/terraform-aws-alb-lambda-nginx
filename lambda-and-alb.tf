@@ -41,28 +41,28 @@ resource "aws_lb" "default" {
 }
 
 # Our load balancer has listeners, which have rules that decide where to direct traffic (target group), as I've defined:
-resource "aws_lb_target_group" "lambda" {
-  name        = "${local.lb_name}-lambda"
+resource "aws_lb_target_group" "lambdaTG" {
+  name        = "lambda-TG"
   target_type = "lambda"
 }
 
-resource "aws_lb_listener" "lambda" {
+resource "aws_lb_listener" "lambdalsnr" {
   load_balancer_arn = aws_lb.default.arn
   port              = "80"
   protocol          = "HTTP"
 
   default_action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.lambda.arn
+    target_group_arn = aws_lb_target_group.lambdaTG.arn
   }
 }
 
-resource "aws_lb_listener_rule" "lambda" {
-  listener_arn = aws_lb_listener.lambda.arn
+resource "aws_lb_listener_rule" "lambdalsnrrule" {
+  listener_arn = aws_lb_listener.lambdalsnr.arn
 
   action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.lambda.arn
+    target_group_arn = aws_lb_target_group.lambdaTG.arn
   }
 
   condition {
@@ -78,11 +78,11 @@ resource "aws_lambda_permission" "with_lb" {
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.get_time.function_name
   principal     = "elasticloadbalancing.amazonaws.com"
-  source_arn    = aws_lb_target_group.lambda.arn
+  source_arn    = aws_lb_target_group.lambdaTG.arn
 }
 
 resource "aws_lb_target_group_attachment" "default" {
-  target_group_arn = aws_lb_target_group.lambda.arn
+  target_group_arn = aws_lb_target_group.lambdaTG.arn
   target_id        = aws_lambda_function.get_time.arn
 }
 
