@@ -1,94 +1,120 @@
-# The father of everything here
-provider "aws" {
-    region = "ap-southeast-2"
+
+locals {
+    # declare vars to make code more maintainabble, like lambda zip location variable
+    lambda_zip_location="C:\\Program Files (x86)\\Temp\\get_time.zip"
+    lb_name = "test-elb"
+    env      = "dev"
 }
 
-# Define a VPC, which enables launchong AWS resources into a virtual network that i've defined
-resource "aws_vpc" "prod-vpc" {
-  cidr_block = "10.0.0.0/16"
+# I am using a data block to generate an archive from my lambda function
+data "archive_file" "get_time" {
+  type        = "zip"
+  source_file = "get_time.py"
+  output_path = local.lambda_zip_location
+}
+
+resource "aws_lambda_function" "get_time" {
+  # filename should be same as output_path on data block
+  filename      = local.lambda_zip_location
+  function_name = "get_time"
+  role          = aws_iam_role.lambda_role.arn
+  handler       = "get_time.get_time"
+  # source_code_has allows it so if I make changes to the lambda and re-apply on terraform, it knows that there have been changes and applies them
+  source_code_hash = "filebase64sha256(local.lambda_zip_location)"
+  runtime = "python3.8"
+  memory_size   = "128"
+  timeout       = "30"
+  publish       = false
+  # Network config for the lambda
+  vpc_config {
+    subnet_ids         = [aws_subnet.subnet-1.id, aws_subnet.subnet-2.id]
+    security_group_ids = [aws_security_group.allow_web.id]
+  }
+
+}
+
+# Create our application load balancer
+resource "aws_lb" "default" {
+  name               = local.lb_name
+  internal           = false
+  load_balancer_type = "application"
+  subnets            = [aws_subnet.subnet-1.id, aws_subnet.subnet-2.id]
+  security_groups    = [aws_security_group.allow_web.id]
+}
+
+# Our load balancer has listeners, which have rules that decide where to direct traffic (target group), as I've defined:
+resource "aws_lb_target_group" "lambdaTG" {
+  name        = "lambda-TG"
+  target_type = "lambda"
+}
+
+resource "aws_lb_listener" "lambdalsnr" {
+  load_balancer_arn = aws_lb.default.arn
+  port              = "80"
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.lambdaTG.arn
+  }
+}
+
+resource "aws_lb_listener_rule" "lambdalsnrrule" {
+  listener_arn = aws_lb_listener.lambdalsnr.arn
+  priority = 100
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.lambdaTG.arn
+  }
+
+  condition {
+    path_pattern {
+      values = ["/lambda/*"]
+    }
+  }
+}
+
+# Give permission so that accessing the LB can trigger the lambda function
+resource "aws_lambda_permission" "with_lb" {
+  statement_id  = "AllowExecutionFromLB"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.get_time.function_name
+  principal     = "elasticloadbalancing.amazonaws.com"
+  source_arn    = aws_lb_target_group.lambdaTG.arn
+}
+
+resource "aws_lb_target_group_attachment" "default" {
+  target_group_arn = aws_lb_target_group.lambdaTG.arn
+  target_id        = aws_lambda_function.get_time.arn
+}
+
+
+# insert ubuntu with nginx as container configuerd by ansible here
+# generate key pair to access ec2 instance
+resource "aws_instance" "ubuntu" {
+  ami           = "ami-0987943c813a8426b"
+  instance_type = "t2.micro"
+  key_name = "ubuntu"
+  vpc_security_group_ids = [aws_security_group.allow_web.id]
+  subnet_id = aws_subnet.subnet-1.id
+
+  user_data = <<-EOF
+                 #!/bin/bash
+                 sudo apt update -y
+                 EOF
+  
   tags = {
-      Name = "prod"
+    Name = "ubuntu"
   }
 }
 
-# Define internet gateway for the VPC to allow access to the internet
-resource "aws_internet_gateway" "gw" {
-  vpc_id = aws_vpc.prod-vpc.id
-
-  tags = {
-    Name = "main"
-  }
+resource "aws_eip" "ubuntu" {
+  vpc      = true
+  instance = aws_instance.ubuntu.id
 }
 
-# Create a Route Table that directs internet-bound traffic to the internet gateway
-
-resource "aws_route_table" "prod-route-table" {
-  vpc_id = aws_vpc.prod-vpc.id
-
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.gw.id
-  }
-
-  route {
-    ipv6_cidr_block = "::/0"
-    gateway_id      = aws_internet_gateway.gw.id
-  }
-
-  tags = {
-    Name = "Prod"
-  }
+# return base url
+output "base_url" {
+  value = aws_lb.default.dns_name
 }
-
-# A VPC aint nothing without its subnets
-resource "aws_subnet" "subnet-1" {
-  vpc_id            = aws_vpc.prod-vpc.id
-  cidr_block        = "10.0.1.0/24"
-  availability_zone = "ap-southeast-2a"
-}
-
-resource "aws_subnet" "subnet-2" {
-  vpc_id            = aws_vpc.prod-vpc.id
-  cidr_block        = "10.0.0.0/24"
-  availability_zone = "ap-southeast-2b"
-}
-
-# Define a security group, which acts as a virtual firewall for my instance to control inbound and outbound traffic
-resource "aws_security_group" "allow_web" {
-   name        = "allow_web_traffic"
-   description = "Allow Web inbound traffic"
-   vpc_id      = aws_vpc.prod-vpc.id
-
-   ingress {
-     description = "HTTPS"
-     from_port   = 443
-     to_port     = 443
-     protocol    = "tcp"
-     cidr_blocks = ["0.0.0.0/0"]
-   }
-   ingress {
-     description = "HTTP"
-     from_port   = 80
-     to_port     = 80
-     protocol    = "tcp"
-     cidr_blocks = ["0.0.0.0/0"]
-   }
-   ingress {
-     description = "SSH"
-     from_port   = 22
-     to_port     = 22
-     protocol    = "tcp"
-     cidr_blocks = ["0.0.0.0/0"]
-   }
-
-   egress {
-     from_port   = 0
-     to_port     = 0
-     protocol    = "-1"
-     cidr_blocks = ["0.0.0.0/0"]
-   }
-
-   tags = {
-     Name = "allow_web"
-   }
- }
