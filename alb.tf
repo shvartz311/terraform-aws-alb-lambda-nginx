@@ -1,34 +1,125 @@
-module "vpc" {
-  source = "terraform-aws-modules/vpc/aws"
-
-  name = "my-vpc"
-  cidr = "10.0.0.0/16"
-
-  azs             = ["ap-southeast-2a", "ap-southeast-2b", "ap-southeast-2c"]
-  private_subnets = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
-  public_subnets  = ["10.0.101.0/24", "10.0.102.0/24", "10.0.103.0/24"]
-
-  enable_nat_gateway = true
-  single_nat_gateway = true
-  enable_vpn_gateway = true
-
+# 1. create vpc
+resource "aws_vpc" "prod-vpc" {
+  cidr_block = "10.0.0.0/16"
   tags = {
-    Terraform = "true"
-    Environment = "dev"
+      Name = "prod"
   }
 }
 
-module "web_server_sg" {
-  source = "terraform-aws-modules/security-group/aws//modules/http-80"
-
-  name        = "web-server"
-  description = "Security group for web-server with HTTP ports open within VPC"
-  vpc_id      = "vpc-12345678"
-
-  ingress_cidr_blocks = ["10.10.0.0/16"]
+# 2. create internet gateway
+resource "aws_internet_gateway" "gw" {
+  vpc_id = aws_vpc.prod-vpc.id
 }
 
-module "alb" {
+# 3. create custom route table
+resource "aws_route_table" "prod-route-table" {
+  vpc_id = aws_vpc.prod-vpc.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.gw.id
+  }
+
+  route {
+    ipv6_cidr_block        = "::/0"
+    gateway_id = aws_internet_gateway.gw.id
+  }
+
+  tags = {
+    Name = "prod"
+  }
+}
+
+variable "subnet_prefix" {
+  description = "cidr block for the subnet"
+  default = "10.0.50.0/24" #this is default cidr if we dont give it terraform will ask for it
+  #type = String string/int/stuff
+}
+
+# 4. create a subnet
+resource "aws_subnet" "subnet-1" {
+    vpc_id = aws_vpc.prod-vpc.id
+    cidr_block = "10.0.50.0/24"
+    availability_zone = "ap-southeast-2a"
+
+    tags = {
+        Name = "prod-subnet"
+    }
+
+}
+
+
+# 5. associate subnet with route table
+resource "aws_route_table_association" "a" {
+  subnet_id      = aws_subnet.subnet-1.id
+  route_table_id = aws_route_table.prod-route-table.id
+}
+
+# 6. create security gorup to allow port 22, 80, 443
+resource "aws_security_group" "allow_web" {
+  name        = "allow_web_traffic"
+  description = "Allow Web inbound traffic"
+  vpc_id      = aws_vpc.prod-vpc.id
+
+  ingress {
+    description = "HTTPS"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "HTTP"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "SSH"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "allow_web"
+  }
+}
+
+# 7. create a network interface with an ip in the usbnet that was created in step 4
+resource "aws_network_interface" "web-server-nic" {
+  subnet_id       = aws_subnet.subnet-1.id
+  private_ips     = ["10.0.1.50"]
+  security_groups = [aws_security_group.allow_web.id]
+
+}
+
+# 8. assign an elastic IP to the network interface created in step 7
+resource "aws_eip" "one" {
+  vpc                       = true
+  network_interface         = aws_network_interface.web-server-nic.id
+  associate_with_private_ip = "10.0.1.50"
+  depends_on = [aws_internet_gateway.gw]
+}
+
+output "server_public_ip" {
+  value = aws_eip.one.public_ip
+}
+
+#Create the ALB
+
+/* module "alb" {
   source  = "terraform-aws-modules/alb/aws"
   version = "~> 5.0"
 
@@ -36,7 +127,7 @@ module "alb" {
 
   load_balancer_type = "application"
 
-  vpc_id             = "vpc-abcde012"
+  vpc_id             = module.vpc_id
   subnets            = ["subnet-abcde012", "subnet-bcde012a"]
   security_groups    = ["sg-edcd9784", "sg-edcd9785"]
 
@@ -73,4 +164,4 @@ module "alb" {
   tags = {
     Environment = "Test"
   }
-}
+} */
