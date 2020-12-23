@@ -3,6 +3,10 @@
 #currently, ansible thingy
 **/ansible*/*
 
+#.pem file and rsa
+*.pem
+*.pub
+
 # .tfstate files
 *.tfstate
 *.tfstate.*

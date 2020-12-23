@@ -40,6 +40,17 @@ resource "aws_lb" "default" {
   load_balancer_type = "application"
   subnets            = [aws_subnet.subnet-1.id, aws_subnet.subnet-2.id]
   security_groups    = [aws_security_group.allow_web.id]
+
+  #trying to attach eips
+  subnet_mapping {
+    subnet_id     = aws_subnet.subnet-1.id
+    allocation_id = aws_eip.ubuntu.id
+  }
+
+  subnet_mapping {
+    subnet_id     = aws_subnet.subnet-2.id
+    allocation_id = aws_eip.lambda.id
+  }
 }
 
 # Our load balancer has listeners, which have rules that decide where to direct traffic (target group), as I've defined:
@@ -89,16 +100,31 @@ resource "aws_lb_target_group_attachment" "default" {
   target_id        = aws_lambda_function.get_time.arn
 }
 
-# insert ubuntu with nginx as container configuerd by ansible here
+# return base url
+output "base_url" {
+  value = aws_lb.default.dns_name
+}
+
+
+resource "aws_eip" "ubuntu" {
+  vpc      = true
+  instance = aws_instance.ubuntu.id
+}
+
+resource "aws_eip" "lambda" {
+  vpc      = true
+}
+
 # generate key pair to access ec2 instance
 resource "aws_instance" "ubuntu" {
   ami           = "ami-0987943c813a8426b"
-  instance_type = "t2.micro"
-  key_name = "ubuntu"
+  instance_type = "t3.micro"
   vpc_security_group_ids = [aws_security_group.allow_web.id]
   subnet_id = aws_subnet.subnet-1.id
+  key_name = "ubuntu"
+  
 
-  # ansible should delpoy and configure so no docker run apparently
+  # Unable to provision the playbook so have to echo it
   user_data = <<-EOF
                  #!/bin/bash
                  sudo apt update -y
@@ -107,26 +133,34 @@ resource "aws_instance" "ubuntu" {
                  chmod 644 /index.html
                  EOF
   
-  provisioner "remote-exec" {
-    inline = [
-      "ansible-playbook playbook.yaml",
-    ]
-  }
-}
-  #sudo docker run --name mynginx1 -p 80:80 -v /index.html:/usr/share/nginx/html/index.html -d nginx
-
   tags = {
     Name = "ubuntu"
   }
-}
 
-resource "aws_eip" "ubuntu" {
-  vpc      = true
-  instance = aws_instance.ubuntu.id
-}
+  # Breaking my head trying to provision the playbook to the instance...
+  /* provisioner "file" {
+    source      = "playbook.yaml"
+    destination = "/playbook.yaml"
+  }
 
+  provisioner "remote-exec" {
+    inline = [
+      "chmod +x /playbook.yaml",
+      "ansible-playbook /playbook.yaml",
+    ]
+  }
+    connection {
+      type     = "ssh"
+      host     = aws_instance.ubuntu.id
+      user     = "ubuntu"
+      #host_key = self.key_name
+      #host_key = file("id_rsa.pub")
+      private_key = file("ubuntu.pem")
+    } */
 
-# return base url
-output "base_url" {
-  value = aws_lb.default.dns_name
-}
+  
+  }
+
+  
+  #sudo docker run --name mynginx1 -p 80:80 -v /index.html:/usr/share/nginx/html/index.html -d nginx
+
