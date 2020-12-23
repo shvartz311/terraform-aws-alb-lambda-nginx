@@ -89,7 +89,6 @@ resource "aws_lb_target_group_attachment" "default" {
   target_id        = aws_lambda_function.get_time.arn
 }
 
-
 # insert ubuntu with nginx as container configuerd by ansible here
 # generate key pair to access ec2 instance
 resource "aws_instance" "ubuntu" {
@@ -99,11 +98,23 @@ resource "aws_instance" "ubuntu" {
   vpc_security_group_ids = [aws_security_group.allow_web.id]
   subnet_id = aws_subnet.subnet-1.id
 
+  # ansible should delpoy and configure so no docker run apparently
   user_data = <<-EOF
                  #!/bin/bash
                  sudo apt update -y
+                 sudo apt install -y jq gzip nano tar git unzip wget docker.io epel-release ansible
+                 echo "<h1>Ory</h1>" > /index.html
+                 chmod 644 /index.html
                  EOF
   
+  provisioner "remote-exec" {
+    inline = [
+      "ansible-playbook playbook.yaml",
+    ]
+  }
+}
+  #sudo docker run --name mynginx1 -p 80:80 -v /index.html:/usr/share/nginx/html/index.html -d nginx
+
   tags = {
     Name = "ubuntu"
   }
@@ -113,6 +124,7 @@ resource "aws_eip" "ubuntu" {
   vpc      = true
   instance = aws_instance.ubuntu.id
 }
+
 
 # return base url
 output "base_url" {

@@ -1,0 +1,90 @@
+---
+- hosts: all
+  become: yes
+  become_user: root
+  become_method: sudo
+  tasks:
+  - name: Install aptitude using apt
+      apt: name=aptitude state=latest update_cache=yes force_apt_get=yes
+
+    - name: Install required system packages
+      apt: name={{ item }} state=latest update_cache=yes
+      loop: [ 'apt-transport-https', 'ca-certificates', 'curl', 'gnupg-agent', 'software-properties-common', 'python-pip', 'virtualenv', 'python3-setuptools']
+
+    - name: Add Docker GPG apt Key
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+
+    - name: Add Docker Repository
+      apt_repository:
+        repo: deb https://download.docker.com/linux/ubuntu bionic stable
+        state: present
+
+    - name: Update apt and install docker-ce
+      apt: name={{ item}} state=latest update_cache=yes
+      loop: [ 'docker-ce', 'docker-ce-cli', 'containerd.io']
+
+    - name: Install Docker Module for Python
+      pip:
+        name: docker
+
+    - name: Pull nginx image
+      docker_image:
+        name: nginx
+        source: pull #?
+
+    - name: Create the container
+      docker_container:
+        name: web-server
+        image: nginx
+        ports:
+          - "80:80"
+        command: docker
+        state: present
+
+      
+    # - name: Enable nginx for amazon linux 2
+    #   shell: "amazon-linux-extras enable nginx1.12"
+    #   become: yes
+    # - name: Install nginx
+    #   yum:
+    #     name: nginx
+    #     state: latest
+
+
+    - name: Copy index.html file into existing container at /usr/share/nginx/html/index.html
+      shell: docker cp /index.html web-server:/usr/share/nginx/html/index.html
+    
+    - name: Restart the container and thus the nginx
+      docker_container:
+        name: web-server
+        image: nginx
+        ports:
+          - "80:80"
+        state: started
+        restart: yes
+
+    
+    # - name: Copy nginx index.html #Copy nginx config files
+    #   copy:
+    #     src: "/index.html" #"./files/nginx.conf"
+    #     dest: /usr/share/nginx/html/index.html #"/etc/nginx/nginx.conf"
+    #     mode: 0644
+    # - name: Creates directory
+    #   file: 
+    #     path: "/var/www/miteshsharma.com"
+    #     state: directory
+    # - name: Copy static files
+    #   copy:
+    #     src: "./files/static_website/"
+    #     dest: "/var/www/miteshsharma.com/"
+    #     mode: 0644
+    # - name: Update static nginx config
+    #   copy: 
+    #     src: "./files/static_website.conf"
+    #     dest: "/etc/nginx/conf.d/miteshsharma.com.conf"
+    #     mode: 0644
+    # - name: Restart Nginx
+    #   service: name=nginx state=restarted
+    #   become: yes
