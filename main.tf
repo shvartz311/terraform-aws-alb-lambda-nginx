@@ -40,24 +40,14 @@ resource "aws_lb" "default" {
   load_balancer_type = "application"
   subnets            = [aws_subnet.subnet-1.id, aws_subnet.subnet-2.id]
   security_groups    = [aws_security_group.allow_web.id]
-
-  #trying to attach eips
-  subnet_mapping {
-    subnet_id     = aws_subnet.subnet-1.id
-    allocation_id = aws_eip.ubuntu.id
-  }
-
-  subnet_mapping {
-    subnet_id     = aws_subnet.subnet-2.id
-    allocation_id = aws_eip.lambda.id
-  }
 }
+
+/* resource "aws_elb_attachment" "attach_ec2" {
+  elb      = aws_lb.default.id
+  instance = aws_instance.ubuntu.id
+} */
 
 # Our load balancer has listeners, which have rules that decide where to direct traffic (target group), as I've defined:
-resource "aws_lb_target_group" "lambdaTG" {
-  name        = "lambda-TG"
-  target_type = "lambda"
-}
 
 resource "aws_lb_listener" "lambdalsnr" {
   load_balancer_arn = aws_lb.default.arn
@@ -66,13 +56,33 @@ resource "aws_lb_listener" "lambdalsnr" {
 
   default_action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.lambdaTG.arn
+    target_group_arn = aws_lb_target_group.nginxTG.arn
   }
+}
+
+# Setting up 1 target group and rule to send requests to lambda, and another to send requests to the nginx
+resource "aws_lb_target_group" "lambdaTG" {
+  name        = "lambda-TG"
+  target_type = "lambda"
+  vpc_id = aws_vpc.prod-vpc.id
+  lifecycle {
+        create_before_destroy = true
+        ignore_changes = [name]
+    }
+
+    health_check {
+        path = "/"
+        protocol = "HTTP"
+        matcher = "200"
+        interval = 15
+        timeout = 3
+        healthy_threshold = 2
+        unhealthy_threshold = 2
+    }
 }
 
 resource "aws_lb_listener_rule" "lambdalsnrrule" {
   listener_arn = aws_lb_listener.lambdalsnr.arn
-  priority = 100
 
   action {
     type             = "forward"
@@ -86,6 +96,38 @@ resource "aws_lb_listener_rule" "lambdalsnrrule" {
   }
 }
 
+resource "aws_lb_target_group_attachment" "default" {
+  target_group_arn = aws_lb_target_group.lambdaTG.arn
+  target_id        = aws_lambda_function.get_time.arn
+}
+
+resource "aws_lb_target_group" "nginxTG" {
+  name = "nginx-TG"
+  port = 80
+  protocol = "HTTP"
+  vpc_id = aws_vpc.prod-vpc.id
+}
+
+resource "aws_lb_listener_rule" "nginxlsnrrule" {
+  listener_arn = aws_lb_listener.lambdalsnr.arn
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.nginxTG.arn
+  }
+
+  condition {
+    path_pattern {
+      values = ["/web/*"]
+    }
+  }
+}
+
+resource "aws_lb_target_group_attachment" "defaultweb" {
+  target_group_arn = aws_lb_target_group.nginxTG.arn
+  target_id        = aws_instance.ubuntu.id
+}
+
 # Give permission so that accessing the LB can trigger the lambda function
 resource "aws_lambda_permission" "with_lb" {
   statement_id  = "AllowExecutionFromLB"
@@ -93,11 +135,6 @@ resource "aws_lambda_permission" "with_lb" {
   function_name = aws_lambda_function.get_time.function_name
   principal     = "elasticloadbalancing.amazonaws.com"
   source_arn    = aws_lb_target_group.lambdaTG.arn
-}
-
-resource "aws_lb_target_group_attachment" "default" {
-  target_group_arn = aws_lb_target_group.lambdaTG.arn
-  target_id        = aws_lambda_function.get_time.arn
 }
 
 # return base url
@@ -124,7 +161,7 @@ resource "aws_instance" "ubuntu" {
   key_name = "ubuntu"
   
 
-  # Unable to provision the playbook so have to echo it
+  # Unable to provision the playbook so thinking about echo
   user_data = <<-EOF
                  #!/bin/bash
                  sudo apt update -y
