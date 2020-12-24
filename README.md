@@ -15,10 +15,14 @@ If you are setting up a container to work in with the image given above, you'll 
 # Get Terraform
 
 curl -o /tmp/terraform.zip -LO https://releases.hashicorp.com/terraform/0.14.3/terraform_0.14.3_linux_amd64.zip
+
 unzip /tmp/terraform.zip
+
 chmod +x terraform && mv terraform /usr/local/bin/
 
 
 terraform init
+
 terraform plan
+
 terraform apply
