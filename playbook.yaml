@@ -32,7 +32,7 @@
     - name: Pull nginx image
       docker_image:
         name: nginx
-        source: pull #?
+        source: pull
 
     - name: Create the container
       docker_container:
@@ -42,16 +42,6 @@
           - "80:80"
         command: docker
         state: present
-
-      
-    # - name: Enable nginx for amazon linux 2
-    #   shell: "amazon-linux-extras enable nginx1.12"
-    #   become: yes
-    # - name: Install nginx
-    #   yum:
-    #     name: nginx
-    #     state: latest
-
 
     - name: Copy index.html file into existing container at /usr/share/nginx/html/index.html
       shell: docker cp /index.html web-server:/usr/share/nginx/html/index.html
@@ -64,27 +54,3 @@
           - "80:80"
         state: started
         restart: yes
-
-    
-    # - name: Copy nginx index.html #Copy nginx config files
-    #   copy:
-    #     src: "/index.html" #"./files/nginx.conf"
-    #     dest: /usr/share/nginx/html/index.html #"/etc/nginx/nginx.conf"
-    #     mode: 0644
-    # - name: Creates directory
-    #   file: 
-    #     path: "/var/www/miteshsharma.com"
-    #     state: directory
-    # - name: Copy static files
-    #   copy:
-    #     src: "./files/static_website/"
-    #     dest: "/var/www/miteshsharma.com/"
-    #     mode: 0644
-    # - name: Update static nginx config
-    #   copy: 
-    #     src: "./files/static_website.conf"
-    #     dest: "/etc/nginx/conf.d/miteshsharma.com.conf"
-    #     mode: 0644
-    # - name: Restart Nginx
-    #   service: name=nginx state=restarted
-    #   become: yes

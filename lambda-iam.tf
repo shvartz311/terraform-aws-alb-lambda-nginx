@@ -1,3 +1,5 @@
+# Defining role and role assume to allow the lambda to run
+
 resource "aws_iam_role_policy" "lambda_policy" {
   name = "lambda_policy"
   role = aws_iam_role.lambda_role.id

@@ -1,7 +1,7 @@
 
 locals {
     # declare vars to make code more maintainabble, like lambda zip location variable
-    lambda_zip_location="C:\\Program Files (x86)\\Temp\\get_time.zip"
+    lambda_zip_location="C:\\Program Files (x86)\\Temp\\get_time.zip" # This is hardcoded because for some reason I had permission issues unless I used temp folder which is usually neutral
     lb_name = "test-elb"
     env      = "dev"
 }
@@ -41,11 +41,6 @@ resource "aws_lb" "default" {
   subnets            = [aws_subnet.subnet-1.id, aws_subnet.subnet-2.id]
   security_groups    = [aws_security_group.allow_web.id]
 }
-
-/* resource "aws_elb_attachment" "attach_ec2" {
-  elb      = aws_lb.default.id
-  instance = aws_instance.ubuntu.id
-} */
 
 # Our load balancer has listeners, which have rules that decide where to direct traffic (target group), as I've defined:
 
@@ -143,6 +138,7 @@ output "base_url" {
 }
 
 
+# Define elastic IPs for both services
 resource "aws_eip" "ubuntu" {
   vpc      = true
   instance = aws_instance.ubuntu.id
@@ -198,6 +194,7 @@ resource "aws_instance" "ubuntu" {
   
   }
 
-  
+  # This line below can alternartively save the headache of bringing in a playbook and 
+  # configuring the nginx as it essentially will give us the same product and thus is more efficient but it's not what the task asked so it is in '#' :)
   #sudo docker run --name mynginx1 -p 80:80 -v /index.html:/usr/share/nginx/html/index.html -d nginx
 

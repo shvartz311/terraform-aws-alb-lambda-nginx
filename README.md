@@ -7,3 +7,18 @@ You can install the things you usually work with and then commit that image and 
 
 # some handy tools
 sudo apt install -y jq gzip nano tar git unzip wget docker.io epel-release ansible
+
+Use aws configure to configure your access key and secret key, and region (mine is ap-southeast-2)
+
+If you are setting up a container to work in with the image given above, you'll need to install terraform in it (after installing all the essentials I used docker commit so I can continously set up and rm the container when I'm working)
+
+# Get Terraform
+
+curl -o /tmp/terraform.zip -LO https://releases.hashicorp.com/terraform/0.14.3/terraform_0.14.3_linux_amd64.zip
+unzip /tmp/terraform.zip
+chmod +x terraform && mv terraform /usr/local/bin/
+
+
+terraform init
+terraform plan
+terraform apply
