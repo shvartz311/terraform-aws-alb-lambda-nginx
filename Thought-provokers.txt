@@ -1,0 +1,41 @@
+How will you secure this app?
+
+Using security groups. When adding a listener to the LB or update the health check port for a target group that the LB uses to route requests, I verify that the security groups associated with the LB allow trafic on the new port in both directions. If they dont i cant edit the rules for the associated security groups or different ones with the LB. SInce I am working with a VPC I can provide the security group for the LB which I did and it allows choosing the prots and protocols that I choose. For example opening ICMP connections for the LB to respond to ping requests.
+
+
+How will you authenticate users?
+
+You can configure an Application Load Balancer to securely authenticate users as they access your applications. This enables you to offload the work of authenticating users to your load balancer so that your applications can focus on their business logic.
+Things I can use according to AWS Docs are:
+
+Authenticate users through an identity provider (IdP) that is OpenID Connect (OIDC) compliant.
+
+Authenticate users through well-known social IdPs, such as Amazon, Facebook, or Google, through the user pools supported by Amazon Cognito.
+
+Authenticate users through corporate identities, using SAML, LDAP, or Microsoft AD, through the user pools supported by Amazon Cognito.
+
+
+What else needs to be done to make this production ready from DevOps side?
+
+Can implement autoscaling groups so I can bring up multiple ec2 instances to allow better handling of traffic i.e scale up and down in accordance to load.
+
+Create a standardized docker image for the nginx app that I am serving with the content I know I'll be using constantly
+
+NOTE TO SELF You can expose your Lambda functions as HTTP endpoints using API Gateway.
+
+Implement ELK/Cloudwatch Logs Insight to gather intel about traffic that I could use to further optimize settings
+
+Configure backups for my application
+
+Use multiple instances - generally a good idea to have more than one of each instance, mandatory for zero-downtime enviroments
+
+Use availability zones to allow high availablity along with the existing load balancing
+Use multiple branches and allow testing of the code before merging further along, i.e. use a branch for each feature and such
+
+Package the app into deployable artifacts using docker images/AMI, tag it properly (i.e. docker image with git commit ID) and use an artifact repo like artifactory
+
+Use multiple VPCs with each defined as a different environment to make use of prod, dev, stage, etc
+
+Get a DNS so I dont have to turn to the LB by its name hah, aws offers route53 for this
+
+Use proper instance sizes to be as efficient, like alpine ubuntu
